@@ -1,0 +1,9 @@
+E:\Project\Case\2017-元大API\yuan_app\yuan_app\bin\Debug\yuan_app.exe
+E:\Project\Case\2017-元大API\yuan_app\yuan_app\bin\Debug\yuan_app.pdb
+E:\Project\Case\2017-元大API\yuan_app\yuan_app\obj\Debug\yuan_app.csprojResolveAssemblyReference.cache
+E:\Project\Case\2017-元大API\yuan_app\yuan_app\obj\Debug\yuan_app.Properties.Resources.resources
+E:\Project\Case\2017-元大API\yuan_app\yuan_app\obj\Debug\yuan_app.csproj.GenerateResource.Cache
+E:\Project\Case\2017-元大API\yuan_app\yuan_app\obj\Debug\yuan_app.exe
+E:\Project\Case\2017-元大API\yuan_app\yuan_app\obj\Debug\yuan_app.pdb
+E:\Project\Case\2017-元大API\yuan_app\yuan_app\obj\Debug\yuan_app.FrmMain.resources
+E:\Project\Case\2017-元大API\yuan_app\yuan_app\bin\Debug\yuan_app.exe.config
