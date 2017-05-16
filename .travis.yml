@@ -1,0 +1,4 @@
+language: csharp
+solution: yuan_app.sln
+install:
+    cd YuantaQuotesAPI
