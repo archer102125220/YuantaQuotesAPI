@@ -1,21 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 
+using System.Data.SqlClient;
 using AxYuantaQuoteLib;
+using System.Linq;
+
+using yuan_app.Model;
 
 namespace yuan_app
 {
     public partial class FrmMain : Form
     {
 
-        public DataTable dt = null;
+        public DataTable dtable = null;
         public BindingSource bs = new BindingSource();
+        public int _times = 0;
+
+        DataBase db = new DataBase();
 
         public FrmMain()
         {
@@ -24,7 +28,7 @@ namespace yuan_app
 
         private void FrmMain_Load(object sender, EventArgs e)
         {
-            dt = new DataTable("QuoteTable");
+            dtable = new DataTable("QuoteTable");
             DataColumn Col0 = new DataColumn("商品代碼", System.Type.GetType("System.String"));
             DataColumn Col2 = new DataColumn("參考價", System.Type.GetType("System.String"));
             DataColumn Col3 = new DataColumn("開盤價", System.Type.GetType("System.String"));
@@ -38,46 +42,37 @@ namespace yuan_app
             DataColumn Col11 = new DataColumn("總成交量", System.Type.GetType("System.String"));
             DataColumn Col12 = new DataColumn("買五", System.Type.GetType("System.String"));
             DataColumn Col13 = new DataColumn("賣五", System.Type.GetType("System.String"));
-            dt.Columns.Add(Col0);
-            dt.Columns.Add(Col2);
-            dt.Columns.Add(Col3);
-            dt.Columns.Add(Col4);
-            dt.Columns.Add(Col5);
-            dt.Columns.Add(Col6);
-            dt.Columns.Add(Col7);
-            dt.Columns.Add(Col8);
-            dt.Columns.Add(Col9);
-            dt.Columns.Add(Col10);
-            dt.Columns.Add(Col11);
-            dt.Columns.Add(Col12);
-            dt.Columns.Add(Col13);
-            dt.PrimaryKey = new DataColumn[] { dt.Columns["商品代碼"] };
+            dtable.Columns.Add(Col0);
+            dtable.Columns.Add(Col2);
+            dtable.Columns.Add(Col3);
+            dtable.Columns.Add(Col4);
+            dtable.Columns.Add(Col5);
+            dtable.Columns.Add(Col6);
+            dtable.Columns.Add(Col7);
+            dtable.Columns.Add(Col8);
+            dtable.Columns.Add(Col9);
+            dtable.Columns.Add(Col10);
+            dtable.Columns.Add(Col11);
+            dtable.Columns.Add(Col12);
+            dtable.Columns.Add(Col13);
+            dtable.PrimaryKey = new DataColumn[] { dtable.Columns["商品代碼"] };
 
-            bs.DataSource = dt;
+            bs.DataSource = dtable;
             Dg.DataSource = bs;
 
             // 自動登入
-            axYQ.SetMktLogon(txtUserId.Text, txtPasswd.Text, txtIP.Text, txtPort.Text);
+            timerLogin.Interval = 300000;
+            Login();
         }
 
         private void btnLogin_Click(object sender, EventArgs e)
         {
-            // 登入
-            axYQ.SetMktLogon(txtUserId.Text, txtPasswd.Text, txtIP.Text, txtPort.Text);
+            Login();
         }
 
         private void btnItemAdd_Click(object sender, EventArgs e)
         {
-            try
-            {
-                //  註冊商品代碼
-                int RegErrCode = axYQ.AddMktReg(txtSymbol.Text.Trim(), combUpdateMode.Text.Substring(0, 1));
-                txtItemStatus.Text = DateTime.Now.ToString("HH:mm:ss.fff ") + RegErrCode.ToString();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-            }
+            ListenData();
         }
 
         private void btnItemRemove_Click(object sender, EventArgs e)
@@ -87,6 +82,7 @@ namespace yuan_app
                 // 取消接收該商品的行情 
                 int RegErrCode = axYQ.DelMktReg(txtSymbol.Text.Trim());
                 txtItemStatus.Text = RegErrCode.ToString();
+                Console.WriteLine("RegErrCode:" + RegErrCode);
             }
             catch (Exception ex)
             {
@@ -98,26 +94,38 @@ namespace yuan_app
         {
             // 連線狀況
             string rs = e.msg.ToString();
-            Console.WriteLine(rs);
+            Console.WriteLine("axYQ_OnMktStatusChange:" + rs);
 
             txtConnStatus.Text = rs;
-            if (rs == "0行情連線登入成功!")
+            if (e.msg.ToString().IndexOf("行情連線結束") >= 0 || e.msg.ToString().IndexOf("行情連線失敗") >= 0)
             {
+                //隔幾秒再連線
+                timerLogin.Enabled = true;
+                btnItemAdd.Enabled = false;
+                btnItemRemove.Enabled = false;
+                combUpdateMode.Enabled = false;
+            }
+            else
+            {
+                // 行情連線登入成功!
                 btnItemAdd.Enabled = true;
                 btnItemRemove.Enabled = true;
                 combUpdateMode.Enabled = true;
-            }
-        }
 
+
+                // 傾聽指定項目
+                ListenData();
+            }
+
+        }
 
         private void axYQ_OnGetMktAll(object sender, _DYuantaQuoteEvents_OnGetMktAllEvent e)
         {
             // 獲取所有行情資料
-            //Console.WriteLine(e.fDBPri);
-            DataRow DR = this.dt.Rows.Find(e.symbol);
+            DataRow DR = this.dtable.Rows.Find(e.symbol);
             string matchtime = e.matchTime != "" ? (string.Format("{0}:{1}:{2}.{3}", e.matchTime.Substring(0, 2), e.matchTime.Substring(2, 2), e.matchTime.Substring(4, 2), e.matchTime.Substring(6, 3))) : "";
 
-            Console.WriteLine(matchtime);
+            //Console.WriteLine(e.matchTime);
             if (DR != null)
             {
                 DR["參考價"] = e.refPri;
@@ -135,10 +143,11 @@ namespace yuan_app
 
                 DR.EndEdit();
                 DR.AcceptChanges();
+
             }
             else
             {
-                DR = this.dt.NewRow();
+                DR = this.dtable.NewRow();
                 DR["商品代碼"] = e.symbol;
                 DR["參考價"] = e.refPri;
                 DR["開盤價"] = e.openPri;
@@ -151,12 +160,16 @@ namespace yuan_app
                 DR["總成交量"] = e.tolMatchQty;
                 DR["買五"] = e.bestBuyPri + e.bestBuyQty;
                 DR["賣五"] = e.bestSellPri + e.bestSellQty;
-                this.dt.Rows.Add(DR);
+                this.dtable.Rows.Add(DR);
             }
 
-            //Dg.Rows.Add(e.symbol, e.refPri, e.openPri, e.highPri, e.lowPri, e.upPri, e.dnPri, matchtime, e.matchPri, e.matchQty, e.tolMatchQty);
-
-             
+            // 更新資料
+            if (!CheckData(e))
+            {
+                UpdateData(e);
+                _times++;
+                lbRuntimes.Text = "Runtimes： " + _times;
+            }
 
             ListShow(String.Format("{0} 買五：{1}-{2}", e.symbol, e.bestBuyPri, e.bestBuyQty));
             ListShow(String.Format("{0} 賣五：{1}-{2}", e.symbol, e.bestSellPri, e.bestSellQty));
@@ -199,7 +212,7 @@ namespace yuan_app
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                Console.WriteLine("error:" + ex);
             }
         }
 
@@ -207,15 +220,7 @@ namespace yuan_app
         {
             // 註冊失敗代碼 
             txtConnStatus.Text = e.errCode.ToString();
-        }
-
-        private void axYQ_OnGetMktData(object sender, _DYuantaQuoteEvents_OnGetMktDataEvent e)
-        {
-            // 未知 可能是標的代號基本資料
-            //Console.WriteLine("sym:" + e.symbol);
-            //Console.WriteLine("pri:" + e.pri);
-            //Console.WriteLine("priType:" + e.priType);
-            //Console.WriteLine("qty:" + e.qty);
+            Console.WriteLine("axYQ_OnRegError(註冊失敗代碼):" + e.errCode.ToString());
         }
 
         private delegate void InvokeFunction(string msg);
@@ -239,27 +244,133 @@ namespace yuan_app
             });
         }
 
-        private void axYQ_OnGetTickData(object sender, _DYuantaQuoteEvents_OnGetTickDataEvent e)
+        private void axYQ_OnGetTimePack(object sender, _DYuantaQuoteEvents_OnGetTimePackEvent e)
         {
-            // 未知
-            Console.WriteLine("axYQ_OnGetTickData:" + e.strBuyPri);
+            Console.WriteLine("axYQ_OnGetTimePack:" + e.strTime);
         }
 
-        private void axYQ_OnGetMktQuote(object sender, _DYuantaQuoteEvents_OnGetMktQuoteEvent e)
+        public void Login()
         {
-            // 未知
-            Console.WriteLine("axYQ_OnGetMktQuote:" + e.disClosure);
+            try
+            {
+                axYQ.SetMktLogon(txtUserId.Text, txtPasswd.Text, txtIP.Text, txtPort.Text);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Login Faild：" + ex);
+            }
+            timerLogin.Start();
         }
 
-        private void axYQ_OnGetTickRangeData(object sender, _DYuantaQuoteEvents_OnGetTickRangeDataEvent e)
+        private void timerLogin_Tick(object sender, EventArgs e)
         {
-            // 未知 可能是取得某個時段資料
-            Console.WriteLine("axYQ_OnGetTickRangeData:" + e.strStartTime);
+            timerLogin.Stop();
+            Login();
         }
 
-        private void btnTest_Click(object sender, EventArgs e)
+
+        public bool CheckData(_DYuantaQuoteEvents_OnGetMktAllEvent e)
         {
-           int tr = axYQ.GetTickRangeData(txtSymbol.Text.Trim(), "201705151000", "201705151200");
+            // 檢查取得的資料是否與資料庫最後新增的那筆不同
+
+            string sql = "select top 1 matchTime from Data order by id desc";
+            SqlConnection conn = new SqlConnection(db.ini);
+            SqlCommand cmd = new SqlCommand(sql);
+            cmd.Connection = conn;
+
+            DataList n_data = new DataList();
+            DataList e_data = new DataList();
+
+            try
+            {
+                conn.Open();
+                SqlDataReader dr = cmd.ExecuteReader();
+                while (dr.Read())
+                {
+                    n_data.matchTime = dr[0].ToString();
+                }
+
+                //  e matchTime
+                e_data.matchTime = e.matchTime;
+            }
+            catch (SqlException ex)
+            {
+                Console.WriteLine(ex);
+            }
+            finally
+            {
+                conn.Close();
+            }
+
+            // Compare 如果目前資料庫最後一筆matchTime 與 API取得的相同,就不寫入資料庫了
+            Console.WriteLine("{0} = DataBase", n_data.matchTime);
+            Console.WriteLine("{0} = API", e_data.matchTime);
+            Console.WriteLine("{0} = Compare Result", n_data.matchTime == e_data.matchTime);
+            return n_data.matchTime == e_data.matchTime;
         }
+
+        public void ListenData()
+        {
+            try
+            {
+                //  註冊商品代碼
+                int RegCode = axYQ.AddMktReg(txtSymbol.Text.Trim(), combUpdateMode.Text.Substring(0, 1));
+                txtItemStatus.Text = DateTime.Now.ToString("HH:mm:ss.fff ") + RegCode.ToString();
+                Console.WriteLine("RegCode:" + RegCode + "   ,  |  0=Success , 3=Faild");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
+        }
+
+        public void UpdateData(_DYuantaQuoteEvents_OnGetMktAllEvent e)
+        {
+            if (e != null)
+            {
+                string sql = "INSERT into Data (symbol, refPri, openPri, highPri, lowPri, upPri, dnPri, matchTime, matchPri, matchQty, tolMatchQty, bestBuyPri, bestBuyQty, bestSellPri, bestSellQty, currentTime) " +
+                    "VALUES (@symbol, @refPri, @openPri, @highPri, @lowPri, @upPri, @dnPri, @matchTime, @matchPri, @matchQty, @tolMatchQty, @bestBuyPri, @bestBuyQty, @bestSellPri, @bestSellQty, @currentTime)";
+                SqlConnection conn = new SqlConnection(db.ini);
+                SqlCommand cmd = new SqlCommand(sql);
+                cmd.Connection = conn;
+
+                cmd.Parameters.Add("@symbol", SqlDbType.NVarChar).Value = e.symbol;
+                cmd.Parameters.Add("@refPri", SqlDbType.NVarChar).Value = e.refPri;
+                cmd.Parameters.Add("@openPri", SqlDbType.NVarChar).Value = e.openPri;
+
+                cmd.Parameters.Add("@highPri", SqlDbType.NVarChar).Value = e.highPri;
+                cmd.Parameters.Add("@lowPri", SqlDbType.NVarChar).Value = e.lowPri;
+                cmd.Parameters.Add("@upPri", SqlDbType.NVarChar).Value = e.upPri;
+                cmd.Parameters.Add("@dnPri", SqlDbType.NVarChar).Value = e.dnPri;
+
+                cmd.Parameters.Add("@matchTime", SqlDbType.NVarChar).Value = e.matchTime;
+                cmd.Parameters.Add("@matchPri", SqlDbType.NVarChar).Value = e.matchPri;
+                cmd.Parameters.Add("@matchQty", SqlDbType.NVarChar).Value = e.matchQty;
+                cmd.Parameters.Add("@tolMatchQty", SqlDbType.NVarChar).Value = e.tolMatchQty;
+
+                cmd.Parameters.Add("@bestBuyPri", SqlDbType.NVarChar).Value = e.bestBuyPri;
+                cmd.Parameters.Add("@bestBuyQty", SqlDbType.NVarChar).Value = e.bestBuyQty;
+
+                cmd.Parameters.Add("@bestSellPri", SqlDbType.NVarChar).Value = e.bestSellPri;
+                cmd.Parameters.Add("@bestSellQty", SqlDbType.NVarChar).Value = e.bestSellQty;
+
+                cmd.Parameters.Add("@currentTime", SqlDbType.DateTime).Value = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                try
+                {
+                    conn.Open();
+                    cmd.ExecuteNonQuery();
+                }
+                catch (SqlException ex)
+                {
+                    Console.WriteLine(ex);
+                }
+                finally
+                {
+                    conn.Close();
+                    Console.WriteLine("Updating Finish");
+                }
+            }
+        }
+
     }
 }
