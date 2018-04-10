@@ -94,7 +94,7 @@
             this.txtPasswd.PasswordChar = '*';
             this.txtPasswd.Size = new System.Drawing.Size(190, 22);
             this.txtPasswd.TabIndex = 4;
-            this.txtPasswd.Text = "e2345678";
+            this.txtPasswd.Text = "";
             this.txtPasswd.UseSystemPasswordChar = true;
             // 
             // lbPasswd
@@ -145,7 +145,7 @@
             this.txtUserId.Name = "txtUserId";
             this.txtUserId.Size = new System.Drawing.Size(190, 22);
             this.txtUserId.TabIndex = 3;
-            this.txtUserId.Text = "P123257564";
+            this.txtUserId.Text = "";
             // 
             // lbUserId
             // 
